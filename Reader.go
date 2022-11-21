@@ -11,6 +11,11 @@ type FileCompare struct {
 	file1, file2 []byte
 }
 
+const dataStart int64 = 9624
+const dataEnd int64 = 13601
+const checksumLocation int64 = 13603
+const fileName string = "Files/Pokemon - Versione Gialla - Speciale Edizione Pikachu (Italy) (GBC,SGB Enhanced).sav"
+
 func NewFileCompare(nFile1 string, nFile2 string) FileCompare {
 	file1, err := os.ReadFile(nFile1)
 	check(err)
@@ -98,17 +103,19 @@ func main() {
 	var str string
 	for {
 		fmt.Print("insrisci l'inizio del file ")
-		fmt.Scan(&str)
+		_, err := fmt.Scan(&str)
+		check(err)
 		start, _ := strconv.ParseInt(str, 16, 64)
 		fmt.Print("insrisci la fine del file ")
-		fmt.Scan(&str)
+		_, err = fmt.Scan(&str)
+		check(err)
 		end, _ := strconv.ParseInt(str, 16, 64)
 		compare, err := files.Compare(start, end)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
-		scelta(compare)
+		scelta(compare, files)
 
 		break
 	}
@@ -125,8 +132,9 @@ func insFile(nFile string, n int) string {
 
 	for {
 		fmt.Printf("Inserire il nome del file %v  (deve essere contenuto nella cartella Files)\t", n)
-		fmt.Scan(&nFile)
-		_, err := os.Stat("Files/" + nFile)
+		_, err := fmt.Scan(&nFile)
+		check(err)
+		_, err = os.Stat("Files/" + nFile)
 		if os.IsNotExist(err) {
 			fmt.Print("il file non esiste, reinseriscilo\n")
 		} else {
@@ -137,7 +145,7 @@ func insFile(nFile string, n int) string {
 	return nFile
 }
 
-func AllPrintCompare(result []CompareResult) {
+func PrintAllCompare(result []CompareResult) {
 	if len(result) == 0 {
 		fmt.Printf("File are the same\n")
 		return
@@ -149,24 +157,37 @@ func AllPrintCompare(result []CompareResult) {
 	}
 }
 
-func scelta(compare []CompareResult) {
+func scelta(compare []CompareResult, files FileCompare) {
 	var s int
-	fmt.Print("\n\n\nInserisci l'opzione desiderata per:\n")
-	fmt.Print("1: stampa di tutti i valori diversi\n")
-	fmt.Print("2: stampa di tutti i valori diversi consecutivi\n")
-	for {
-		fmt.Scan(&s)
-		if s <= 2 || s >= 1 {
-			break
+	exit := 0
+	for exit != 1 {
+		fmt.Print("\n\n\nInserisci l'opzione desiderata per:\n")
+		fmt.Print("1: stampa di tutti i valori diversi\n")
+		fmt.Print("2: stampa di tutti i valori diversi consecutivi\n")
+		fmt.Print("3: calcolo e controllo checksum\n")
+		fmt.Print("4: cambiare dei byte\n")
+		fmt.Print("5: per uscire dal programma\t")
+		for {
+			_, err := fmt.Scan(&s)
+			check(err)
+			if s <= 5 && s >= 1 {
+				break
+			}
+			fmt.Print("reinseriscila scimmia\n")
 		}
-		fmt.Print("reinseriscila scimmia\n")
-	}
 
-	switch s {
-	case 1:
-		AllPrintCompare(compare)
-	case 2:
-		PrintNeighboors(compare)
+		switch s {
+		case 1:
+			PrintAllCompare(compare)
+		case 2:
+			PrintNeighboors(compare)
+		case 3:
+			checksum(files)
+		case 4:
+			WriteSwtich(files, compare)
+		case 5:
+			exit = 1
+		}
 	}
 
 }
@@ -182,6 +203,7 @@ func PrintNeighboors(result []CompareResult) {
 
 }
 
+// todo sistemare errori del print ricorsivo
 func ricPrint(i int, compare CompareResult, result []CompareResult) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -195,27 +217,124 @@ func ricPrint(i int, compare CompareResult, result []CompareResult) {
 	}
 }
 
-func kMain(in []CompareResult) (out []CompareResult) {
-	out = make([]CompareResult, 0)
-	for i := 0; i < len(in); {
-		outPart := keepNeighboursBetter(in[i+1:], in[i].Index)
-		if len(outPart) != 0 {
-			out = append(out, in[i])
-			out = append(out, outPart...)
-			i += len(out)
+/*
+	func kMain(in []CompareResult) (out []CompareResult) {
+		out = make([]CompareResult, 0)
+		for i := 0; i < len(in); {
+			outPart := keepNeighboursBetter(in[i+1:], in[i].Index)
+			if len(outPart) != 0 {
+				out = append(out, in[i])
+				out = append(out, outPart...)
+				i += len(out)
+			}
 		}
-	}
-	return
-}
-
-func keepNeighboursBetter(in []CompareResult, indexToBeEqual int64) (out []CompareResult) {
-	out = make([]CompareResult, 0)
-	if len(in) < 2 {
 		return
 	}
-	if in[0].Index-1 == indexToBeEqual {
-		out = append(out, in[0])
-		out = append(out, keepNeighboursBetter(in[1:], in[0].Index)...)
+
+	func keepNeighboursBetter(in []CompareResult, indexToBeEqual int64) (out []CompareResult) {
+		out = make([]CompareResult, 0)
+		if len(in) < 2 {
+			return
+		}
+		if in[0].Index-1 == indexToBeEqual {
+			out = append(out, in[0])
+			out = append(out, keepNeighboursBetter(in[1:], in[0].Index)...)
+		}
+		return
 	}
-	return
+*/
+func checksum(files FileCompare) byte {
+	var cs byte
+	cs = 255
+	for i := dataStart; i <= dataEnd; i++ {
+		cs = cs - files.file1[i]
+	}
+
+	fmt.Printf("%X \n", files.file1[checksumLocation])
+	fmt.Printf("%X", cs)
+	return cs
 }
+
+func WriteSwtich(files FileCompare, compare []CompareResult) {
+	var s int
+	exit := 0
+	for exit != 1 {
+		fmt.Print("\n\nScegliere:\n")
+		fmt.Print("1: Cambiare un nuovo byte\n")
+		fmt.Print("2: Cambiare un byte con indirizzo personalizzato")
+		fmt.Print("3: Non cambiare\n")
+		for {
+			_, err := fmt.Scan(&s)
+			check(err)
+			if s <= 3 && s >= 1 {
+				break
+			}
+			fmt.Print("reinseriscila scimmia\n")
+		}
+		switch s {
+		case 1:
+			Write(files, compare)
+		case 2:
+			WritePers(files)
+		case 3:
+			exit = 1
+
+		}
+
+	}
+}
+
+func WritePers(files FileCompare) {
+	var str string
+	fmt.Print("inserisci l'indirizzo da sostituire")
+	_, err := fmt.Scan(&str)
+	check(err)
+	ind, _ := strconv.ParseInt(str, 16, 64)
+	var by byte
+	fmt.Printf("\n Inserire il numero da sostituire ")
+	for {
+		_, err := fmt.Scanf("%X", &by)
+		if err == nil {
+			break
+		}
+	}
+
+	files.file1[ind] = by
+	files.file1[checksumLocation] = checksum(files)
+
+	err = os.WriteFile(fileName, files.file1, 0666)
+	check(err)
+}
+
+func Write(files FileCompare, compare []CompareResult) {
+
+	var ind int
+	fmt.Print("scegliere quale byte modificare inserendo il numero associato all'indirizzo desiderato" + "\n")
+	for i := 0; i < len(compare); i++ {
+		fmt.Printf("%v : %X\n", i, compare[i].Index)
+	}
+	for {
+		_, err := fmt.Scan(&ind)
+		check(err)
+		if (ind < len(compare)) && ind >= 0 {
+			break
+		}
+		fmt.Print("numero inesistente, reinserirlo\n")
+	}
+	var by byte
+	fmt.Printf("\n Inserire il numero da sostituire ")
+	for {
+		_, err := fmt.Scanf("%X", &by)
+		if err == nil {
+			break
+		}
+	}
+
+	files.file1[compare[ind].Index] = by
+	files.file1[checksumLocation] = checksum(files)
+
+	err := os.WriteFile(fileName, files.file1, 0666)
+	check(err)
+}
+
+//todo miglioni di controlli errori
